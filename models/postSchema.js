@@ -2,11 +2,17 @@ import { Schema, model } from "mongoose";
 
 const postSchema = new Schema(
   {
-    photo: {
+    dailyPhoto: {
       type: String,
       required: true,
     },
-    caption: {
+    dailyCaption: {
+      //TODO validation, eg. max and min length
+      type: String,
+      required: true,
+    },
+    cloudinaryId: {
+      // // store the public_id for Cloudinary operations
       type: String,
       required: true,
     },

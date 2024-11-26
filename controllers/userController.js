@@ -1,6 +1,6 @@
-import mongoose from "mongoose";
 import { User } from "../models/userSchema.js";
 import nodemailer from "nodemailer";
+import { generateToken } from "../middleware/jwt.js";
 import jwt from "jsonwebtoken";
 
 const transporter = nodemailer.createTransport({
@@ -16,23 +16,23 @@ const transporter = nodemailer.createTransport({
 
 export const registerUser = async (req, res, next) => {
   try {
-    let token; // IMPORTANT: JWT
     const { username, email, password } = req.body;
     const newUser = new User({ username, email, password });
+    const token = generateToken({ userId: newUser._id }); // payload
     newUser.validationToken = token;
     await newUser.save();
 
     const mailOptions = {
-      from: "Photo Album Journal email-verification",
+      from: "Photo Journal App email-verification",
       to: newUser.email,
       subject: "Please confirm your registration",
+      html: `<p>Click <a href="${process.env.BASE_URL}${process.env.PORT}/verify-email/${token}">here</a> to verify your email address.</p>`,
       text: `Click on the following link to verify your email address: ${process.env.BASE_URL}${process.env.PORT}/verify-email/${token}`,
-      html: `<p>Click <a href="${verificationLink}">here</a> to verify your email address.</p>`,
     };
 
     transporter.sendMail(mailOptions, (error, info) => {
       if (error) {
-        console.error(error);
+        console.error("Error sending verification email", error);
         res.status(500).json({ err: "Error sending verification email!" });
       } else {
         console.log("Email sent:", info.response);
@@ -51,9 +51,9 @@ export const registerUser = async (req, res, next) => {
 export const verifyUser = async (req, res, next) => {
   try {
     const token = req.params.token;
-    // decode jwt token
+    jwt.verify(token, process.env.SECRET_KEY);
 
-    const user = User.find({ validationToken: token });
+    const user = await User.findOne({ validationToken: token });
 
     if (user) {
       user.emailValidated = true;
@@ -61,6 +61,7 @@ export const verifyUser = async (req, res, next) => {
       return res.status(200).json({
         msg: "Email successfully verified",
         emailValidated: user.emailValidated,
+        user,
       });
     } else {
       return res.status(401).json({ err: "Unauthorized: Invalid token" });
@@ -70,7 +71,31 @@ export const verifyUser = async (req, res, next) => {
   }
 };
 
+// login either via (username OR email) and (password), generate token - attach to cookie, and send to client (for 1h in browser's cookie storage)
 export const loginUser = async (req, res, next) => {
   try {
-  } catch (error) {}
+    const { username, email, password } = req.body;
+    const user = await User.findOne({
+      $or: [{ username }, { email }],
+    });
+
+    if (!user) return res.status(404).json({ msg: "User not found!" });
+
+    const isAuthenticated = await user.authenticate(password);
+    if (!isAuthenticated)
+      return res.status(401).json({ msg: "Incorrect credentials!" });
+
+    // if user is found (via username OR password) AND authenticated (correct password) -> generate token
+    const token = generateToken({ userId: user._id }); // payload
+    return res
+      .status(200)
+      .cookie("jwt", token, {
+        httpOnly: true,
+        // secure: true, // deactivated for demo purposes via thunder client
+        maxAge: 60 * 60 * 1000, //1h
+      })
+      .json({ msg: "Successfully signed in" });
+  } catch (error) {
+    next(error);
+  }
 };
