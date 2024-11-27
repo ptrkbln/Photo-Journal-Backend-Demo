@@ -1,10 +1,15 @@
 import express from "express";
 import connectDB from "../unterricht-21/backend/config/dbConnect.js";
+import userRouter from "./routes/userRouter.js";
+import postRouter from "./routes/postRouter.js";
 
 connectDB();
 
 const app = express();
-app.use(express.json({ limit: "10mb" })); // TODO does this work?
+app.use(express.json());
+
+app.use("/", userRouter);
+app.use("/journal", postRouter);
 
 // catch-all handler for undefined routes
 app.use((req, res, next) => {

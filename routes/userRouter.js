@@ -9,3 +9,5 @@ userRouter
   .post("/signin", user.loginUser);
 
 // authenticate as middleware comes later on with routes that are accessible only to a specific user
+
+export default userRouter;
