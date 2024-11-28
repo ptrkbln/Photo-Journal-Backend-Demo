@@ -1,6 +1,7 @@
 import { Post } from "../models/postSchema.js";
 import { User } from "../models/userSchema.js";
 import upload from "../config/cloudinary.js";
+import { captionValidator } from "../helpers/validateCaption.js";
 
 export const createPost = [
   upload.single("dailyPhoto"),
@@ -10,14 +11,17 @@ export const createPost = [
         return res.status(400).json({ error: "File is required or too large" });
       }
 
-      console.log("Received request for profile picture upload:", req.file);
+      // console.log("Received request for profile picture upload:", req.file);
 
       const user = await User.findById(req.user.userId); // from authentication middleware: req.user = { userId: user._id }
 
-      const { caption } = req.body; // caption that comes with the picture from form in frontend
+      const { dailyCaption } = req.body; // caption that comes with the picture from form in frontend
+      if (!captionValidator(dailyCaption))
+        return res.status(400).json({ msg: "Invalid caption" });
       const imageUrl = req.file.path; // cloudinary URL
 
-      const dateToday = req.file.public_id; // we set the public_id in the cloudinary config to today's date (YYYY-MM-DD)
+      const fullDate = new Date(); // Current date
+      const dateToday = fullDate.toISOString().split("T")[0]; // YYYY-MM-DD
 
       // if a post from today (with today's date) already exists -> delete it and then create the new one
       const alreadyPostedToday = await Post.findOne({ postDate: dateToday });
@@ -29,7 +33,7 @@ export const createPost = [
       // save image + caption to database
       const newPost = await Post.create({
         dailyPhoto: imageUrl,
-        dailyCaption: caption,
+        dailyCaption,
         postDate: dateToday, // === req.file.public_id
       });
 
@@ -51,9 +55,10 @@ export const getPostByDate = async (req, res, next) => {
     const user = await User.findById(req.user.userId); // from authentication middleware: req.user = { userId: user._id }
 
     const { postDate } = req.body; // date provided by the client
+    if (!postDate) return res.status(400).json({ msg: "Please select a date" });
 
     // find the post with this date and make sure it belongs to the logged-in user's album
-    const post = Post.findOne({ postDate, _id: { $in: user.album } });
+    const post = await Post.findOne({ postDate, _id: { $in: user.album } });
 
     if (!post)
       return res

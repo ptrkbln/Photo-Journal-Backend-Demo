@@ -2,6 +2,9 @@ import { User } from "../models/userSchema.js";
 import nodemailer from "nodemailer";
 import { generateToken } from "../middleware/jwt.js";
 import jwt from "jsonwebtoken";
+import { emailValidator } from "../helpers/validateEmail.js";
+import { passwordValidator } from "../helpers/validatePassword.js";
+import { usernameValidator } from "../helpers/validateUsername.js";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -17,6 +20,14 @@ const transporter = nodemailer.createTransport({
 export const registerUser = async (req, res, next) => {
   try {
     const { username, email, password } = req.body;
+
+    if (!usernameValidator(username))
+      return res.status(400).json({ msg: "Invalid username" });
+    if (!emailValidator(email))
+      return res.status(400).json({ msg: "Invalid email address" });
+    if (!passwordValidator(password))
+      return res.status(400).json({ msg: "Invalid password" });
+
     const newUser = new User({ username, email, password });
     const token = generateToken({ userId: newUser._id }); // payload
     newUser.validationToken = token;
@@ -26,8 +37,8 @@ export const registerUser = async (req, res, next) => {
       from: "Photo Journal App email-verification",
       to: newUser.email,
       subject: "Please confirm your registration",
-      html: `<p>Click <a href="${process.env.BASE_URL}${process.env.PORT}/verify-email/${token}">here</a> to verify your email address.</p>`,
-      text: `Click on the following link to verify your email address: ${process.env.BASE_URL}${process.env.PORT}/verify-email/${token}`,
+      html: `<p>Click <a href="${process.env.BASE_URL}${process.env.PORT}/email-verification/${token}">here</a> to verify your email address.</p>`,
+      text: `Click on the following link to verify your email address: ${process.env.BASE_URL}${process.env.PORT}/email-verification/${token}`,
     };
 
     transporter.sendMail(mailOptions, (error, info) => {
@@ -47,16 +58,16 @@ export const registerUser = async (req, res, next) => {
   }
 };
 
-// IMPORTANT: verify-email get route
 export const verifyUser = async (req, res, next) => {
   try {
     const token = req.params.token;
-    jwt.verify(token, process.env.SECRET_KEY);
+    jwt.verify(token, process.env.JWT_SECRET);
 
     const user = await User.findOne({ validationToken: token });
 
     if (user) {
       user.emailValidated = true;
+      user.validationToken = null; // Remove the registration token once it does its job
       await user.save();
       return res.status(200).json({
         msg: "Email successfully verified",
@@ -81,16 +92,22 @@ export const loginUser = async (req, res, next) => {
 
     if (!user) return res.status(404).json({ msg: "User not found!" });
 
-    const isAuthenticated = await user.authenticate(password);
+    const isAuthenticated = user.authenticate(password);
     if (!isAuthenticated)
       return res.status(401).json({ msg: "Incorrect credentials!" });
+
+    // if user is authenticated, first make them verify email
+    if (!user.emailValidated)
+      return res.status(401).json({
+        msg: "Email not verified. Please verify your email to log in.",
+      });
 
     // if user is found (via username OR password) AND authenticated (correct password) -> generate token
     const token = generateToken({ userId: user._id }); // payload
     return res
       .status(200)
       .cookie("jwt", token, {
-        httpOnly: true,
+        // httpOnly: true, // deactivated for demo purposes via thunder client
         // secure: true, // deactivated for demo purposes via thunder client
         maxAge: 60 * 60 * 1000, //1h
       })

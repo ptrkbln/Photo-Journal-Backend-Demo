@@ -9,16 +9,14 @@ const userSchema = new Schema(
       unique: true,
     },
     email: {
-      // TODO validation: checking email format
       type: String,
       required: true,
       unique: true,
     },
     password: {
-      // TODO validation: ensuring password strength
       type: String,
       required: true,
-    } /* profile pic? */,
+    },
     album: [
       {
         type: Schema.Types.ObjectId,
@@ -50,6 +48,7 @@ userSchema.pre("save", async function (next) {
 userSchema.methods.authenticate = async function (password) {
   return await bcrypt.compare(password, this.password);
 };
+
 // as soon as something is converted to JSON (eg.res.json) the function will be envoked (remove password)
 userSchema.methods.toJSON = function () {
   const user = this.toObject();

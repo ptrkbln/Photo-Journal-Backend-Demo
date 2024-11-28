@@ -5,8 +5,8 @@ const userRouter = Router();
 
 userRouter
   .post("/signup", user.registerUser)
-  .get("/verify-email/:token", user.verifyUser)
-  .post("/signin", user.loginUser);
+  .get("/email-verification/:token", user.verifyUser)
+  .post("/login", user.loginUser);
 
 // authenticate as middleware comes later on with routes that are accessible only to a specific user
 

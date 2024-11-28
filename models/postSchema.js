@@ -6,7 +6,6 @@ const postSchema = new Schema({
     required: true,
   },
   dailyCaption: {
-    //TODO validation, eg. max and min length
     type: String,
     required: true,
   },
