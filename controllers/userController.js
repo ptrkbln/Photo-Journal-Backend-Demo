@@ -5,6 +5,8 @@ import jwt from "jsonwebtoken";
 import { emailValidator } from "../helpers/validateEmail.js";
 import { passwordValidator } from "../helpers/validatePassword.js";
 import { usernameValidator } from "../helpers/validateUsername.js";
+import { Post } from "../models/postSchema.js";
+import cloudinary from "cloudinary";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -112,6 +114,36 @@ export const loginUser = async (req, res, next) => {
         maxAge: 60 * 60 * 1000, //1h
       })
       .json({ msg: "Successfully signed in" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteUser = async (req, res, next) => {
+  try {
+    const user = await User.findOne(req.user.userId); // from authentication middleware
+
+    const allUserPosts = await Post.find({ _id: { $in: user.album } });
+    if (allUserPosts.length > 0) {
+      // loop through posts, delete uploaded images and database Post documents
+      for (const userPost of allUserPosts) {
+        const publicId = `Backend-Project/${userPost.postDate}`;
+        try {
+          await cloudinary.uploader.destroy(publicId);
+        } catch (error) {
+          console.error(
+            `Failed to delete image ${publicId} from Cloudinary:`,
+            error
+          );
+        }
+        await Post.deleteOne({ _id: userPost._id });
+      }
+    }
+    // if database documents & uploaded images successfully deleted, delete also the user itself
+    await User.deleteOne(user);
+    return res
+      .status(200)
+      .json({ msg: "User and all posts deleted successfully." });
   } catch (error) {
     next(error);
   }

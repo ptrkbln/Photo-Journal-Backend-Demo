@@ -75,25 +75,28 @@ export const getPastPostsOnTodaysDate = async (req, res, next) => {
     const user = await User.findById(req.user.userId); // from authentication middleware: req.user = { userId: user._id }
 
     const fullDate = new Date(); // eg. Wed Nov 27 2024 15:45:30 GMT+0100 (Central European Standard Time)
-    const dateOnly = fullDate.toISOString().split("T")[0];
+    const dateOnly = fullDate.toISOString().split("T")[0]; // YYYY-MM-DD
 
-    const dateYear = `${dateOnly.split("-")[0]}`;
-    const dateMonthDay = `${dateOnly.split("-")[1]}-${dateOnly.split("-")[2]}`;
+    const dateYear = `${dateOnly.split("-")[0]}`; // YYYY
+    const dateMonthDay = `${dateOnly.split("-")[1]}-${dateOnly.split("-")[2]}`; // MM-DD
 
-    // Find posts where postDate ends with `MM-DD` but does not start with the current year
     const pastPosts = await Post.find({
-      postDate: {
-        $regex: new RegExp(`^((?!${year}).)*-${dateMonthDay}$`),
-        _id: { $in: user.album },
-      },
+      _id: { $in: user.album }, // find all posts from the user first
     });
 
-    if (pastPosts.length === 0)
+    // To users posts apply the regex condition separately to the postDate field
+    const filteredPosts = pastPosts.filter((post) => {
+      return post.postDate.match(
+        new RegExp(`^((?!${dateYear}).)*-${dateMonthDay}$`)
+      );
+    });
+
+    if (filteredPosts.length === 0)
       return res
         .status(404)
         .json({ msg: "No posts found on today's date from past years" });
 
-    res.status(200).json(pastPosts);
+    res.status(200).json(filteredPosts);
   } catch (error) {
     next(error);
   }

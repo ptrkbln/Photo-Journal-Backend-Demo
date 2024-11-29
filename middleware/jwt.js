@@ -31,6 +31,6 @@ export const authenticate = async (req, res, next) => {
     req.user = { userId: user._id };
     next();
   } catch (error) {
-    return res.status(403).json({ msg: "Authotization failed." });
+    return res.status(403).json({ msg: "Authorization failed." });
   }
 };
