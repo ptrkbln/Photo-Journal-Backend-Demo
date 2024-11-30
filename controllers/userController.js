@@ -56,6 +56,15 @@ export const registerUser = async (req, res, next) => {
       }
     });
   } catch (error) {
+    if (error.code === 11000) {
+      // MongoDB error code for duplicate key
+      if (error.keyPattern.email) {
+        return res.status(400).json({ msg: "Email is already in use" });
+      }
+      if (error.keyPattern.username) {
+        return res.status(400).json({ msg: "Username is already in use" });
+      }
+    }
     next(error);
   }
 };
@@ -143,7 +152,7 @@ export const deleteUser = async (req, res, next) => {
     await User.deleteOne(user);
     return res
       .status(200)
-      .json({ msg: "User and all posts deleted successfully." });
+      .json({ msg: "User profile and all posts deleted successfully." });
   } catch (error) {
     next(error);
   }

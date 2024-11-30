@@ -54,8 +54,9 @@ export const getPostByDate = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.userId); // from authentication middleware: req.user = { userId: user._id }
 
-    const { postDate } = req.body; // date provided by the client
-    if (!postDate) return res.status(400).json({ msg: "Please select a date" });
+    const { postDate } = req.params; // date provided by the client
+    if (!postDate)
+      return res.status(400).json({ msg: "Please select a date." });
 
     // find the post with this date and make sure it belongs to the logged-in user's album
     const post = await Post.findOne({ postDate, _id: { $in: user.album } });
@@ -84,7 +85,7 @@ export const getPastPostsOnTodaysDate = async (req, res, next) => {
       _id: { $in: user.album }, // find all posts from the user first
     });
 
-    // To users posts apply the regex condition separately to the postDate field
+    // To users posts apply the regex condition separately to the postDate field (regex doesnt work together with Post.find() in just 1 step)
     const filteredPosts = pastPosts.filter((post) => {
       return post.postDate.match(
         new RegExp(`^((?!${dateYear}).)*-${dateMonthDay}$`)
@@ -104,7 +105,7 @@ export const getPastPostsOnTodaysDate = async (req, res, next) => {
 
 export const getAllUserPosts = async (req, res, next) => {
   try {
-    const user = await User.findOne(req.user.userId);
+    const user = await User.findById(req.user.userId);
 
     const allUserPosts = await Post.find({ _id: { $in: user.album } });
 
