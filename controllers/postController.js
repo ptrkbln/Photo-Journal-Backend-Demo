@@ -3,41 +3,41 @@ import { User } from "../models/userSchema.js";
 import upload from "../config/cloudinary.js";
 import { captionValidator } from "../helpers/validateCaption.js";
 
+// Create a daily post (image and caption)
+// Replaces any existing post with today's date
 export const createPost = [
-  upload.single("dailyPhoto"),
+  upload.single("dailyPhoto"), // Middleware to handle image upload
   async (req, res, next) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "File is required or too large" });
       }
 
-      // console.log("Received request for profile picture upload:", req.file);
+      const user = await User.findById(req.user.userId); // Get user from authentication middleware: req.user = { userId: user._id }
 
-      const user = await User.findById(req.user.userId); // from authentication middleware: req.user = { userId: user._id }
-
-      const { dailyCaption } = req.body; // caption that comes with the picture from form in frontend
+      const { dailyCaption } = req.body;
       if (!captionValidator(dailyCaption))
         return res.status(400).json({ msg: "Invalid caption" });
-      const imageUrl = req.file.path; // cloudinary URL
+      const imageUrl = req.file.path; // cloudinary URL for the uploaded image
 
-      const fullDate = new Date(); // Current date
-      const dateToday = fullDate.toISOString().split("T")[0]; // YYYY-MM-DD
+      const fullDate = new Date();
+      const dateToday = fullDate.toISOString().split("T")[0]; // Format: YYYY-MM-DD
 
-      // if a post from today (with today's date) already exists -> delete it and then create the new one
+      // Check for an existing post with today's date, and remove it if found
       const alreadyPostedToday = await Post.findOne({ postDate: dateToday });
 
       if (alreadyPostedToday) {
         await alreadyPostedToday.remove();
       }
 
-      // save image + caption to database
+      // Create and save the new post
       const newPost = await Post.create({
         dailyPhoto: imageUrl,
         dailyCaption,
         postDate: dateToday, // === req.file.public_id
       });
 
-      // add post (_id) to the user's album (1-m relationship)
+      // Add the new post's ID to the user's album (1-n relationship)
       user.album.push(newPost._id);
       await user.save();
 
@@ -50,15 +50,16 @@ export const createPost = [
   },
 ];
 
+// Retrieve a specific post by date
 export const getPostByDate = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.userId); // from authentication middleware: req.user = { userId: user._id }
+    const user = await User.findById(req.user.userId);
 
-    const { postDate } = req.params; // date provided by the client
+    const { postDate } = req.params;
     if (!postDate)
       return res.status(400).json({ msg: "Please select a date." });
 
-    // find the post with this date and make sure it belongs to the logged-in user's album
+    // Ensure the post belongs to the user's album
     const post = await Post.findOne({ postDate, _id: { $in: user.album } });
 
     if (!post)
@@ -71,21 +72,22 @@ export const getPostByDate = async (req, res, next) => {
   }
 };
 
+// Fetch posts from previous years on today's date
 export const getPastPostsOnTodaysDate = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.userId); // from authentication middleware: req.user = { userId: user._id }
+    const user = await User.findById(req.user.userId);
 
-    const fullDate = new Date(); // eg. Wed Nov 27 2024 15:45:30 GMT+0100 (Central European Standard Time)
-    const dateOnly = fullDate.toISOString().split("T")[0]; // YYYY-MM-DD
+    const fullDate = new Date();
+    const dateOnly = fullDate.toISOString().split("T")[0]; // Format: YYYY-MM-DD
 
-    const dateYear = `${dateOnly.split("-")[0]}`; // YYYY
+    const dateYear = `${dateOnly.split("-")[0]}`; // Current year
     const dateMonthDay = `${dateOnly.split("-")[1]}-${dateOnly.split("-")[2]}`; // MM-DD
 
     const pastPosts = await Post.find({
-      _id: { $in: user.album }, // find all posts from the user first
+      _id: { $in: user.album }, // User's posts
     });
 
-    // To users posts apply the regex condition separately to the postDate field (regex doesnt work together with Post.find() in just 1 step)
+    // Filter posts for today's date (month, day) across other years
     const filteredPosts = pastPosts.filter((post) => {
       return post.postDate.match(
         new RegExp(`^((?!${dateYear}).)*-${dateMonthDay}$`)
@@ -103,6 +105,7 @@ export const getPastPostsOnTodaysDate = async (req, res, next) => {
   }
 };
 
+// Fetch all posts from the logged-in user
 export const getAllUserPosts = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.userId);

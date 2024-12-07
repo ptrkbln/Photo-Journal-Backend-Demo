@@ -8,21 +8,24 @@ import { usernameValidator } from "../helpers/validateUsername.js";
 import { Post } from "../models/postSchema.js";
 import cloudinary from "cloudinary";
 
+// Configuring the nodemailer transporter to send emails via Gmail's SMTP service
 const transporter = nodemailer.createTransport({
   service: "gmail",
   host: "smtp.gmail.com",
   port: 587,
-  secure: false,
+  secure: false, // Not using secure connection (for "backend-only" demo purposes)
   auth: {
     user: process.env.EMAIL,
     pass: process.env.PASSWORD,
   },
 });
 
+// Register a new user
 export const registerUser = async (req, res, next) => {
   try {
     const { username, email, password } = req.body;
 
+    // Validate user input using custom validators
     if (!usernameValidator(username))
       return res.status(400).json({ msg: "Invalid username" });
     if (!emailValidator(email))
@@ -30,19 +33,22 @@ export const registerUser = async (req, res, next) => {
     if (!passwordValidator(password))
       return res.status(400).json({ msg: "Invalid password" });
 
+    // Create a new user and generate a verification token
     const newUser = new User({ username, email, password });
-    const token = generateToken({ userId: newUser._id }); // payload
-    newUser.validationToken = token;
+    const token = generateToken({ userId: newUser._id }); // Payload containing user ID
+    newUser.validationToken = token; // Storing validation token in user's validationToken field
     await newUser.save();
 
+    // Setting up the email options
     const mailOptions = {
-      from: "Photo Journal App email-verification",
+      from: "Photo Journal App email-verification", // Sender name
       to: newUser.email,
       subject: "Please confirm your registration",
       html: `<p>Click <a href="${process.env.BASE_URL}${process.env.PORT}/email-verification/${token}">here</a> to verify your email address.</p>`,
       text: `Click on the following link to verify your email address: ${process.env.BASE_URL}${process.env.PORT}/email-verification/${token}`,
     };
 
+    // Send the verification email
     transporter.sendMail(mailOptions, (error, info) => {
       if (error) {
         console.error("Error sending verification email", error);
@@ -57,7 +63,7 @@ export const registerUser = async (req, res, next) => {
     });
   } catch (error) {
     if (error.code === 11000) {
-      // MongoDB error code for duplicate key
+      // Handle duplicate username or email errors from MongoDB
       if (error.keyPattern.email) {
         return res.status(400).json({ msg: "Email is already in use" });
       }
@@ -69,16 +75,18 @@ export const registerUser = async (req, res, next) => {
   }
 };
 
+// Verify the user's email using the token sent during registration
 export const verifyUser = async (req, res, next) => {
   try {
-    const token = req.params.token;
-    jwt.verify(token, process.env.JWT_SECRET);
+    const token = req.params.token; // Extract token from URL parameters
+    jwt.verify(token, process.env.JWT_SECRET); // Verify the token using JWT_SECRET
 
+    // Find the user associated with the verification token
     const user = await User.findOne({ validationToken: token });
 
     if (user) {
-      user.emailValidated = true;
-      user.validationToken = null; // Remove the registration token once it does its job
+      user.emailValidated = true; // Set the user's emailValidated field to true
+      user.validationToken = null; // Remove the registration token
       await user.save();
       return res.status(200).json({
         msg: "Email successfully verified",
@@ -93,7 +101,7 @@ export const verifyUser = async (req, res, next) => {
   }
 };
 
-// login either via (username OR email) and (password), generate token - attach to cookie, and send to client (for 1h in browser's cookie storage)
+// Log in the user via username/email and password, generate a JWT token (attach to cookie) and send it back to Client
 export const loginUser = async (req, res, next) => {
   try {
     const { username, email, password } = req.body;
@@ -107,19 +115,19 @@ export const loginUser = async (req, res, next) => {
     if (!isAuthenticated)
       return res.status(401).json({ msg: "Incorrect credentials!" });
 
-    // if user is authenticated, first make them verify email
+    // If email not verified, reject login attempt
     if (!user.emailValidated)
       return res.status(401).json({
         msg: "Email not verified. Please verify your email to log in.",
       });
 
-    // if user is found (via username OR password) AND authenticated (correct password) -> generate token
+    // If login successful, generate JWT token and send it in the cookie
     const token = generateToken({ userId: user._id }); // payload
     return res
       .status(200)
       .cookie("jwt", token, {
-        // httpOnly: true, // deactivated for demo purposes via thunder client
-        // secure: true, // deactivated for demo purposes via thunder client
+        // httpOnly: true, // deactivated for backend-only demo purposes via Insomnia/Postman
+        // secure: true, // deactivated for backend-only demo purposes via Insomnia/Postman
         maxAge: 60 * 60 * 1000, //1h
       })
       .json({ msg: "Successfully signed in" });
@@ -128,27 +136,29 @@ export const loginUser = async (req, res, next) => {
   }
 };
 
+// Delete a user and their posts and uploaded images
 export const deleteUser = async (req, res, next) => {
   try {
-    const user = await User.findOne(req.user.userId); // from authentication middleware
+    const user = await User.findOne(req.user.userId);
 
+    // Find all posts associated with the user
     const allUserPosts = await Post.find({ _id: { $in: user.album } });
     if (allUserPosts.length > 0) {
-      // loop through posts, delete uploaded images and database Post documents
+      // If user has posts, delete associated images from Cloudinary
       for (const userPost of allUserPosts) {
         const publicId = `Backend-Project/${userPost.postDate}`;
         try {
-          await cloudinary.uploader.destroy(publicId);
+          await cloudinary.uploader.destroy(publicId); // Delete image from Cloudinary
         } catch (error) {
           console.error(
             `Failed to delete image ${publicId} from Cloudinary:`,
             error
           );
         }
-        await Post.deleteOne({ _id: userPost._id });
+        await Post.deleteOne({ _id: userPost._id }); // Delete the post document
       }
     }
-    // if database documents & uploaded images successfully deleted, delete also the user itself
+    // Delete the user after deleting all associated posts and images
     await User.deleteOne(user);
     return res
       .status(200)
