@@ -27,11 +27,15 @@ export const registerUser = async (req, res, next) => {
 
     // Validate user input using custom validators
     if (!usernameValidator(username))
-      return res.status(400).json({ msg: "Invalid username" });
+      return res.status(400).json({
+        msg: "Invalid username. Must be between 3 and 16 characters long, start with a letter and can contain letters, numbers, or underscores.",
+      });
     if (!emailValidator(email))
-      return res.status(400).json({ msg: "Invalid email address" });
+      return res.status(400).json({ msg: "Invalid email address." });
     if (!passwordValidator(password))
-      return res.status(400).json({ msg: "Invalid password" });
+      return res.status(400).json({
+        msg: "Invalid password. Must be between 8 and 20 characters long, contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).",
+      });
 
     // Create a new user and generate a verification token
     const newUser = new User({ username, email, password });

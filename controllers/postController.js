@@ -17,7 +17,11 @@ export const createPost = [
 
       const { dailyCaption } = req.body;
       if (!captionValidator(dailyCaption))
-        return res.status(400).json({ msg: "Invalid caption" });
+        return res
+          .status(400)
+          .json({
+            msg: "Invalid caption. Must be between 2 and 200 characters long, can contain only letters (both uppercase and lowercase), numbers, certain special characters (.,:;!?()⁻^), and whitespace (spaces, tabs, newlines).",
+          });
       const imageUrl = req.file.path; // cloudinary URL for the uploaded image
 
       const fullDate = new Date();

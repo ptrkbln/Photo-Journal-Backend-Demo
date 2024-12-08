@@ -1,7 +1,7 @@
 /* 
   Validator for passwords:
   - Minimum 8 characters, maximum 20 characters.
-  - Must contain at least one uppercase letter, one lowercase letter, one number, and one special character (# ? !).
+  - Must contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).
 */
 export const passwordValidator = (password) => {
   const regex =
